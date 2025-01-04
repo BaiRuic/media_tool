@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>视频转换工具</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="styles.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.11.0/dist/ffmpeg.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="video-converter">
+            <h1 class="text-center mb-4">视频转换工具</h1>
+            
+            <div class="upload-section">
+                <div class="upload-area" id="dropZone">
+                    <i class="upload-icon">📁</i>
+                    <p class="upload-text">拖拽文件到这里或点击选择文件</p>
+                    <input type="file" id="fileInput" accept="video/*" class="file-input">
+                </div>
+            </div>
+
+            <div class="conversion-options mt-4">
+                <h4>转换选项</h4>
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="formatSelect" class="form-label">输出格式</label>
+                            <select class="form-select" id="formatSelect">
+                                <option value="mp4">MP4</option>
+                                <option value="webm">WebM</option>
+                                <option value="avi">AVI</option>
+                                <option value="mov">MOV</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="qualitySelect" class="form-label">质量</label>
+                            <select class="form-select" id="qualitySelect">
+                                <option value="high">高质量</option>
+                                <option value="medium">中等质量</option>
+                                <option value="low">低质量</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="progress mt-4 d-none" id="progressBar">
+                <div class="progress-bar" role="progressbar" style="width: 0%"></div>
+            </div>
+
+            <div class="text-center mt-4">
+                <button class="btn btn-primary btn-lg" id="convertBtn" disabled>开始转换</button>
+            </div>
+
+            <div class="result-section mt-4 d-none" id="resultSection">
+                <h4>转换结果</h4>
+                <div class="alert alert-success">
+                    <p class="mb-2">转换完成！</p>
+                    <a href="#" class="btn btn-success btn-sm" id="downloadBtn">下载文件</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // 使用配置创建 FFmpeg 实例
+        const { createFFmpeg } = FFmpeg;
+        const ffmpeg = createFFmpeg({
+            log: true,
+            progress: ({ ratio }) => {
+                if (ratio && !isNaN(ratio)) {
+                    const progressElement = progressBar.querySelector('.progress-bar');
+                    progressElement.style.width = `${ratio * 100}%`;
+                    progressElement.setAttribute('aria-valuenow', ratio * 100);
+                }
+            }
+        });
+
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const convertBtn = document.getElementById('convertBtn');
+        const progressBar = document.getElementById('progressBar');
+        const resultSection = document.getElementById('resultSection');
+        const downloadBtn = document.getElementById('downloadBtn');
+        let selectedFile = null;
+
+        // 初始化 FFmpeg
+        (async function() {
+            try {
+                await ffmpeg.load();
+                console.log('FFmpeg 加载成功');
+            } catch (err) {
+                console.error('FFmpeg 加载失败:', err);
+                alert('FFmpeg 加载失败，请刷新页面重试');
+            }
+        })();
+
+        // 处理文件选择
+        fileInput.addEventListener('change', handleFileSelect);
+
+        // 处理拖拽
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dropZone.style.borderColor = '#0d6efd';
+        });
+
+        dropZone.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dropZone.style.borderColor = '#6c757d';
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dropZone.style.borderColor = '#6c757d';
+            
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                fileInput.files = files;
+                handleFileSelect();
+            }
+        });
+
+        function handleFileSelect() {
+            const file = fileInput.files[0];
+            if (file) {
+                if (file.type.startsWith('video/')) {
+                    selectedFile = file;
+                    convertBtn.disabled = false;
+                    document.querySelector('.upload-text').textContent = `已选择: ${file.name}`;
+                } else {
+                    alert('请选择视频文件！');
+                    fileInput.value = '';
+                    convertBtn.disabled = true;
+                    selectedFile = null;
+                }
+            }
+        }
+
+        // 转换按钮点击事件
+        convertBtn.addEventListener('click', async () => {
+            if (!selectedFile) return;
+
+            const formatSelect = document.getElementById('formatSelect');
+            const qualitySelect = document.getElementById('qualitySelect');
+            const outputFormat = formatSelect.value;
+            const quality = qualitySelect.value;
+
+            // 显示进度条
+            progressBar.classList.remove('d-none');
+            const progressElement = progressBar.querySelector('.progress-bar');
+            progressElement.style.width = '0%';
+            convertBtn.disabled = true;
+
+            try {
+                // 读取文件
+                const data = await selectedFile.arrayBuffer();
+                ffmpeg.FS('writeFile', 'input', new Uint8Array(data));
+
+                // 设置转换参数
+                let ffmpegArgs = [];
+                switch(quality) {
+                    case 'high':
+                        ffmpegArgs = ['-i', 'input', '-c:v', 'libx264', '-crf', '18'];
+                        break;
+                    case 'medium':
+                        ffmpegArgs = ['-i', 'input', '-c:v', 'libx264', '-crf', '23'];
+                        break;
+                    case 'low':
+                        ffmpegArgs = ['-i', 'input', '-c:v', 'libx264', '-crf', '28'];
+                        break;
+                }
+                ffmpegArgs.push(`output.${outputFormat}`);
+
+                // 执行转换
+                await ffmpeg.run(...ffmpegArgs);
+
+                // 获取输出文件
+                const output = ffmpeg.FS('readFile', `output.${outputFormat}`);
+                const outputBlob = new Blob([output.buffer], { type: `video/${outputFormat}` });
+
+                // 创建下载链接
+                const url = URL.createObjectURL(outputBlob);
+                downloadBtn.href = url;
+                downloadBtn.download = `converted_video.${outputFormat}`;
+
+                // 显示结果区域
+                resultSection.classList.remove('d-none');
+
+                // 清理
+                ffmpeg.FS('unlink', 'input');
+                ffmpeg.FS('unlink', `output.${outputFormat}`);
+
+            } catch (error) {
+                console.error('转换错误:', error);
+                alert('视频转换过程中发生错误，请重试！');
+            } finally {
+                convertBtn.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>

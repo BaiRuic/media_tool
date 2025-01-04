@@ -64,15 +64,24 @@
                     <a href="#" class="btn btn-success btn-sm" id="downloadBtn">下载文件</a>
                 </div>
             </div>
+
+            <div class="thread-info mt-3 alert alert-info">
+                正在检测多线程支持...
+            </div>
         </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        const threadInfo = document.querySelector('.thread-info');
+        // 限制最大线程数为4
+        const numThreads = Math.min(navigator.hardwareConcurrency || 2, 4);
+        
         // 使用配置创建 FFmpeg 实例
         const { createFFmpeg } = FFmpeg;
         const ffmpeg = createFFmpeg({
             log: true,
+            threads: numThreads,
             progress: ({ ratio }) => {
                 if (ratio && !isNaN(ratio)) {
                     const progressElement = progressBar.querySelector('.progress-bar');
@@ -95,9 +104,13 @@
             try {
                 await ffmpeg.load();
                 console.log('FFmpeg 加载成功');
+                threadInfo.textContent = `多线程已启用: 使用 ${numThreads} 个线程进行转换`;
+                threadInfo.className = 'mt-3 alert alert-success';
             } catch (err) {
                 console.error('FFmpeg 加载失败:', err);
                 alert('FFmpeg 加载失败，请刷新页面重试');
+                threadInfo.textContent = '多线程初始化失败';
+                threadInfo.className = 'mt-3 alert alert-danger';
             }
         })();
 
@@ -169,15 +182,18 @@
                 let ffmpegArgs = [];
                 switch(quality) {
                     case 'high':
-                        ffmpegArgs = ['-i', 'input', '-c:v', 'libx264', '-crf', '18'];
+                        ffmpegArgs = ['-i', 'input', '-c:v', 'libx264', '-preset', 'medium', '-crf', '18', '-threads', String(numThreads), '-thread_type', 'frame'];
                         break;
                     case 'medium':
-                        ffmpegArgs = ['-i', 'input', '-c:v', 'libx264', '-crf', '23'];
+                        ffmpegArgs = ['-i', 'input', '-c:v', 'libx264', '-preset', 'medium', '-crf', '23', '-threads', String(numThreads), '-thread_type', 'frame'];
                         break;
                     case 'low':
-                        ffmpegArgs = ['-i', 'input', '-c:v', 'libx264', '-crf', '28'];
+                        ffmpegArgs = ['-i', 'input', '-c:v', 'libx264', '-preset', 'medium', '-crf', '28', '-threads', String(numThreads), '-thread_type', 'frame'];
                         break;
                 }
+
+                // 添加音频相关参数
+                ffmpegArgs.push('-c:a', 'aac', '-b:a', '128k');
                 ffmpegArgs.push(`output.${outputFormat}`);
 
                 // 执行转换

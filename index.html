@@ -200,22 +200,42 @@
                 const data = await file.arrayBuffer();
                 ffmpeg.FS('writeFile', 'input', new Uint8Array(data));
 
-                let ffmpegArgs = [];
+                let ffmpegArgs = ['-i', 'input'];
+                
+                // 设置编码器和线程
+                ffmpegArgs.push(
+                    '-c:v', 'libx264',        // 视频编码器
+                    '-threads', String(threads), // 线程数
+                    '-thread_type', 'frame',   // 线程类型：frame
+                    '-x264-params', `threads=${threads}`, // x264编码器的线程数
+                    '-row-mt', '1',           // 启用行级多线程
+                    '-preset', 'veryfast'     // 使用更快的预设
+                );
+
+                // 根据质量设置参数
                 switch(quality) {
                     case 'high':
-                        ffmpegArgs = ['-i', 'input', '-c:v', 'libx264', '-preset', 'medium', '-crf', '18'];
+                        ffmpegArgs.push('-crf', '18');
                         break;
                     case 'medium':
-                        ffmpegArgs = ['-i', 'input', '-c:v', 'libx264', '-preset', 'medium', '-crf', '23'];
+                        ffmpegArgs.push('-crf', '23');
                         break;
                     case 'low':
-                        ffmpegArgs = ['-i', 'input', '-c:v', 'libx264', '-preset', 'medium', '-crf', '28'];
+                        ffmpegArgs.push('-crf', '28');
                         break;
                 }
 
-                ffmpegArgs.push('-threads', String(threads), '-thread_type', 'frame');
-                ffmpegArgs.push('-c:a', 'aac', '-b:a', '128k');
+                // 音频设置
+                ffmpegArgs.push(
+                    '-c:a', 'aac',
+                    '-b:a', '128k',
+                    '-movflags', '+faststart' // 优化视频加载速度
+                );
+
+                // 输出文件
                 ffmpegArgs.push(`output.${format}`);
+
+                console.log('FFmpeg 命令:', ffmpegArgs.join(' ')); // 输出完整命令以便调试
 
                 await ffmpeg.run(...ffmpegArgs);
 

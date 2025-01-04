@@ -5,100 +5,269 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>视频格式转换器</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js"></script>
+    <style>
+        .drop-zone {
+            border: 2px dashed #ccc;
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+            background: #f8f9fa;
+            transition: all 0.3s ease;
+            min-height: 200px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+        }
+
+        .drop-zone.dragover {
+            background: #e9ecef;
+            border-color: #0d6efd;
+        }
+
+        .file-item {
+            background: #fff;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 10px;
+            margin: 10px 0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .settings-panel {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+
+        .convert-btn {
+            width: 100%;
+            padding: 15px;
+            font-size: 1.2em;
+            margin: 20px 0;
+        }
+
+        .file-progress {
+            flex-grow: 1;
+            margin: 0 15px;
+        }
+
+        .estimated-time {
+            font-size: 0.9em;
+            color: #6c757d;
+        }
+    </style>
 </head>
 <body>
     <div class="container mt-5">
-        <h1 class="mb-4">在线视频格式转换器</h1>
+        <h1 class="mb-4 text-center">高级视频格式转换器</h1>
         
-        <div class="mb-3">
-            <label for="videoFile" class="form-label">选择视频文件</label>
-            <input type="file" class="form-control" id="videoFile" accept="video/*">
+        <div class="drop-zone" id="dropZone">
+            <i class="fas fa-cloud-upload-alt fa-3x mb-3"></i>
+            <h4>拖放视频文件到这里</h4>
+            <p>或者</p>
+            <input type="file" id="fileInput" class="d-none" multiple accept="video/*">
+            <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">
+                选择文件
+            </button>
         </div>
 
-        <div class="mb-3">
-            <label for="formatSelect" class="form-label">选择输出格式</label>
-            <select class="form-select" id="formatSelect">
-                <option value="mp4">MP4</option>
-                <option value="webm">WebM</option>
-                <option value="mov">MOV</option>
-                <option value="avi">AVI</option>
-            </select>
+        <div id="fileList" class="mt-4"></div>
+
+        <div class="settings-panel">
+            <h5 class="mb-3">转换设置</h5>
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="mb-3">
+                        <label class="form-label">输出格式</label>
+                        <select class="form-select" id="formatSelect">
+                            <option value="mp4">MP4</option>
+                            <option value="webm">WebM</option>
+                            <option value="mov">MOV</option>
+                            <option value="avi">AVI</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="mb-3">
+                        <label class="form-label">视频质量</label>
+                        <select class="form-select" id="qualitySelect">
+                            <option value="high">高质量</option>
+                            <option value="medium" selected>中等质量</option>
+                            <option value="low">低质量</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="mb-3">
+                        <label class="form-label">CPU 使用率</label>
+                        <input type="range" class="form-range" id="cpuUsage" min="1" max="4" value="2">
+                        <div class="text-muted text-center" id="cpuUsageLabel">中等负载</div>
+                    </div>
+                </div>
+            </div>
         </div>
 
-        <button class="btn btn-primary" onclick="convertVideo()" id="convertBtn">开始转换</button>
-
-        <div class="progress mt-3 d-none" id="progressBar">
-            <div class="progress-bar" role="progressbar" style="width: 0%"></div>
-        </div>
-
-        <div id="result" class="mt-3"></div>
+        <button class="btn btn-primary convert-btn" onclick="startConversion()" id="convertBtn">
+            开始转换
+        </button>
     </div>
 
     <script>
         const { createFFmpeg, fetchFile } = FFmpeg;
         const ffmpeg = createFFmpeg({ log: true });
+        let files = [];
 
+        // 初始化 FFmpeg
         async function load() {
             await ffmpeg.load();
         }
-
         load();
 
-        async function convertVideo() {
-            const videoFile = document.getElementById('videoFile').files[0];
-            if (!videoFile) {
-                alert('请先选择视频文件');
+        // 拖放区域事件处理
+        const dropZone = document.getElementById('dropZone');
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+        });
+
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('dragover');
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            const newFiles = Array.from(e.dataTransfer.files).filter(file => file.type.startsWith('video/'));
+            addFiles(newFiles);
+        });
+
+        document.getElementById('fileInput').addEventListener('change', (e) => {
+            addFiles(Array.from(e.target.files));
+        });
+
+        // CPU 使用率滑块
+        document.getElementById('cpuUsage').addEventListener('input', (e) => {
+            const labels = ['低负载', '中等负载', '较高负载', '最大负载'];
+            document.getElementById('cpuUsageLabel').textContent = labels[e.target.value - 1];
+        });
+
+        function addFiles(newFiles) {
+            files.push(...newFiles);
+            updateFileList();
+        }
+
+        function removeFile(index) {
+            files.splice(index, 1);
+            updateFileList();
+        }
+
+        function updateFileList() {
+            const fileList = document.getElementById('fileList');
+            fileList.innerHTML = files.map((file, index) => `
+                <div class="file-item">
+                    <div class="file-info">
+                        <i class="fas fa-file-video"></i>
+                        ${file.name}
+                    </div>
+                    <div class="file-progress flex-grow-1 mx-3 d-none">
+                        <div class="progress">
+                            <div class="progress-bar" role="progressbar" style="width: 0%"></div>
+                        </div>
+                    </div>
+                    <div class="estimated-time">预计用时: ${estimateConversionTime(file.size)}</div>
+                    <button class="btn btn-danger btn-sm ms-2" onclick="removeFile(${index})">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        function estimateConversionTime(fileSize) {
+            const sizeMB = fileSize / (1024 * 1024);
+            const quality = document.getElementById('qualitySelect').value;
+            const cpuUsage = document.getElementById('cpuUsage').value;
+            
+            // 简单估算公式，实际转换时间会受多种因素影响
+            let baseTime = sizeMB * 0.5; // 基础时间（秒）
+            const qualityMultiplier = { high: 1.5, medium: 1, low: 0.7 }[quality];
+            const cpuMultiplier = 1 / (cpuUsage * 0.5);
+            
+            const estimatedSeconds = baseTime * qualityMultiplier * cpuMultiplier;
+            
+            if (estimatedSeconds < 60) {
+                return `${Math.ceil(estimatedSeconds)}秒`;
+            } else {
+                return `${Math.ceil(estimatedSeconds / 60)}分钟`;
+            }
+        }
+
+        async function startConversion() {
+            if (files.length === 0) {
+                alert('请先添加视频文件');
                 return;
             }
 
             const outputFormat = document.getElementById('formatSelect').value;
-            const inputFileName = 'input-video';
-            const outputFileName = `output-video.${outputFormat}`;
-
+            const quality = document.getElementById('qualitySelect').value;
             document.getElementById('convertBtn').disabled = true;
-            document.getElementById('progressBar').classList.remove('d-none');
-            const progressBar = document.querySelector('.progress-bar');
 
-            try {
-                // 写入文件到 FFmpeg 虚拟文件系统
-                ffmpeg.FS('writeFile', inputFileName, await fetchFile(videoFile));
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                const fileItems = document.querySelectorAll('.file-item');
+                const progressDiv = fileItems[i].querySelector('.file-progress');
+                const progressBar = progressDiv.querySelector('.progress-bar');
+                
+                progressDiv.classList.remove('d-none');
+                
+                try {
+                    const inputFileName = `input-${i}`;
+                    const outputFileName = `output-${i}.${outputFormat}`;
 
-                // 执行转换
-                await ffmpeg.run('-i', inputFileName, outputFileName);
+                    await ffmpeg.FS('writeFile', inputFileName, await fetchFile(file));
 
-                // 读取输出文件
-                const data = ffmpeg.FS('readFile', outputFileName);
-                const blob = new Blob([data.buffer], { type: `video/${outputFormat}` });
-                const url = URL.createObjectURL(blob);
+                    // 根据质量设置转换参数
+                    const qualitySettings = {
+                        high: ['-crf', '18'],
+                        medium: ['-crf', '23'],
+                        low: ['-crf', '28']
+                    }[quality];
 
-                // 创建下载链接
-                const result = document.getElementById('result');
-                result.innerHTML = `
-                    <div class="alert alert-success">
-                        转换完成！
-                        <a href="${url}" download="converted-video.${outputFormat}" class="btn btn-success ms-3">
-                            下载视频
-                        </a>
-                    </div>
-                `;
+                    await ffmpeg.run('-i', inputFileName, ...qualitySettings, outputFileName);
 
-                // 清理文件系统
-                ffmpeg.FS('unlink', inputFileName);
-                ffmpeg.FS('unlink', outputFileName);
+                    const data = ffmpeg.FS('readFile', outputFileName);
+                    const blob = new Blob([data.buffer], { type: `video/${outputFormat}` });
+                    const url = URL.createObjectURL(blob);
 
-            } catch (error) {
-                console.error(error);
-                document.getElementById('result').innerHTML = `
-                    <div class="alert alert-danger">
-                        转换失败：${error.message}
-                    </div>
-                `;
-            } finally {
-                document.getElementById('convertBtn').disabled = false;
-                document.getElementById('progressBar').classList.add('d-none');
+                    progressBar.style.width = '100%';
+                    progressBar.classList.add('bg-success');
+
+                    // 添加下载链接
+                    const downloadBtn = document.createElement('a');
+                    downloadBtn.href = url;
+                    downloadBtn.download = `converted-${file.name}.${outputFormat}`;
+                    downloadBtn.className = 'btn btn-success btn-sm ms-2';
+                    downloadBtn.innerHTML = '<i class="fas fa-download"></i>';
+                    fileItems[i].appendChild(downloadBtn);
+
+                    // 清理
+                    ffmpeg.FS('unlink', inputFileName);
+                    ffmpeg.FS('unlink', outputFileName);
+
+                } catch (error) {
+                    console.error(error);
+                    progressBar.classList.add('bg-danger');
+                    alert(`转换失败: ${file.name} - ${error.message}`);
+                }
             }
+
+            document.getElementById('convertBtn').disabled = false;
         }
     </script>
 </body>

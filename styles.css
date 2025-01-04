@@ -48,6 +48,74 @@
     cursor: pointer;
 }
 
+.selected-files {
+    background-color: #fff;
+    border-radius: 8px;
+    padding: 1rem;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.file-item {
+    position: relative;
+    padding: 0.75rem 1rem;
+    margin-bottom: 0.5rem;
+    background-color: #f8f9fa;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+}
+
+.file-item .progress-bg {
+    position: absolute;
+    left: 0;
+    top: 0;
+    height: 100%;
+    width: 0;
+    background-color: rgba(13, 110, 253, 0.1);
+    transition: width 0.3s ease;
+    z-index: 1;
+}
+
+.file-item .file-name {
+    flex-grow: 1;
+    margin-right: 1rem;
+    z-index: 2;
+}
+
+.file-item .progress-text {
+    margin-right: 1rem;
+    color: #6c757d;
+    z-index: 2;
+}
+
+.file-item .delete-btn {
+    background: none;
+    border: none;
+    color: #dc3545;
+    font-size: 1.2rem;
+    cursor: pointer;
+    padding: 0 0.5rem;
+    z-index: 2;
+}
+
+.file-item .delete-btn:hover {
+    color: #bb2d3b;
+}
+
+.file-item.converting {
+    background-color: #e9ecef;
+}
+
+.file-item.converted {
+    background-color: #d1e7dd;
+}
+
+.file-item.error {
+    background-color: #f8d7da;
+}
+
 .conversion-options {
     background-color: #fff;
     padding: 1.5rem;

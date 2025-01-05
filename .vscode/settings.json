@@ -1,0 +1,9 @@
+{
+    "liveServer.settings.https": {
+        "enable": true,
+        "cert": "",
+        "key": "",
+        "passphrase": ""
+    },
+    "liveServer.settings.CustomHeader": "Cross-Origin-Opener-Policy: same-origin\nCross-Origin-Embedder-Policy: require-corp"
+}

@@ -1,3 +1,8 @@
+// 首先检查浏览器支持
+if (!checkBrowserSupport()) {
+    console.error('浏览器不支持所需特性');
+}
+
 const threadInfo = document.querySelector('.thread-info');
 const maxThreads = Math.min(navigator.hardwareConcurrency || 2, 12);
 document.getElementById('threadCount').max = maxThreads;
@@ -173,32 +178,36 @@ async function convertFile(file, options) {
             ffmpegArgs.push('-movflags', '+faststart');
         }
 
-        // 输出文件
-        ffmpegArgs.push(`output.${options.format}`);
+        // 生成输出文件路径 - 在原始文件所在目录
+        const originalPath = file.path || file.name;
+        const outputFileName = `${file.name.split('.')[0]}_converted.${options.format}`;
+        const outputPath = originalPath.replace(file.name, outputFileName);
+        
+        ffmpegArgs.push(outputPath);
 
         console.log('FFmpeg 命令:', ffmpegArgs.join(' ')); // 输出完整命令以便调试
 
-        await ffmpeg.run(...ffmpegArgs);
+        try {
+            await ffmpeg.run(...ffmpegArgs);
+            
+            // 清理
+            ffmpeg.FS('unlink', 'input');
 
-        const output = ffmpeg.FS('readFile', `output.${options.format}`);
-        const outputBlob = new Blob([output.buffer], { type: `video/${options.format}` });
-        
-        // 创建下载链接
-        const url = URL.createObjectURL(outputBlob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `converted_${file.name.split('.')[0]}.${options.format}`;
-        a.click();
-        URL.revokeObjectURL(url);
-
-        // 清理
-        ffmpeg.FS('unlink', 'input');
-        ffmpeg.FS('unlink', `output.${options.format}`);
-
-        fileItem.classList.remove('converting');
-        fileItem.classList.add('converted');
-        fileItem.querySelector('.progress-text').textContent = '转换完成';
-
+            fileItem.classList.remove('converting');
+            fileItem.classList.add('converted');
+            fileItem.querySelector('.progress-text').textContent = '转换完成';
+            
+            // 显示成功消息
+            const successMsg = document.createElement('div');
+            successMsg.className = 'success-message';
+            successMsg.textContent = `文件已保存至: ${outputPath}`;
+            fileItem.appendChild(successMsg);
+        } catch (error) {
+            console.error('转换过程出错:', error);
+            fileItem.classList.remove('converting');
+            fileItem.classList.add('error');
+            fileItem.querySelector('.progress-text').textContent = '转换失败';
+        }
     } catch (error) {
         console.error('转换错误:', error);
         fileItem.classList.remove('converting');
@@ -274,3 +283,15 @@ document.getElementById('formatSelect').addEventListener('change', function(e) {
             `;
     }
 });
+
+// 浏览器支持检查函数
+function checkBrowserSupport() {
+    // 检查浏览器是否支持必要的特性
+    // 例如，检查是否支持 WebAssembly、Web Workers 等
+    // 这里可以根据实际需求添加更多的检查
+    return (
+        typeof WebAssembly !== 'undefined' &&
+        typeof Worker !== 'undefined' &&
+        typeof navigator.hardwareConcurrency !== 'undefined'
+    );
+}
